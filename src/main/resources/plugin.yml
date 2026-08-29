@@ -4,3 +4,16 @@ version: '${version}'
 main: net.kihashix.meloCore.MeloCore
 api-version: '1.21.11'
 load: POSTWORLD
+
+commands:
+  mc:
+    description: Lenh chinh cua MeloCore
+    usage: /mc skills <give|remove|list|cooldown|toggle|info|debug> ...
+
+permissions:
+  melocore.admin.skills:
+    description: Quan ly skill (give/remove/cooldown/toggle)
+    default: op
+  melocore.admin.debug:
+    description: Bat/tat debug va nhan thong bao debug
+    default: op
