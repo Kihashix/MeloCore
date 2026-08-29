@@ -174,7 +174,7 @@ public class FrostShot extends AbstractSkill {
         Long activatedAt = pending.get(player.getUniqueId());
         if (activatedAt != null && System.currentTimeMillis() - activatedAt < PENDING_TIMEOUT_MS) {
             // Đã sẵn sàng và chưa hết hạn: giữ nguyên, không phát lại sound/message
-            broadcastDebug(player.getName() + " sneak lần nữa — vẫn đang sẵn sàng.");
+            broadcastDebug(player.getName() + ": Duy trì gồng");
             return true;
         }
 
@@ -184,8 +184,7 @@ public class FrostShot extends AbstractSkill {
         // player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fĐã sẵn sàng!"));
         sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &fBăng Phong Quy Vị!");
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GLASS_STEP, 0.8f, 1.6f);
-        broadcastDebug(player.getName() + " đã kích hoạt (chờ bắn cung, hết hạn sau "
-                + (PENDING_TIMEOUT_MS / 1000L) + "s). Cooldown sẽ chạy từ lúc bắn.");
+        broadcastDebug(player.getName() + ": Đã nạp (" + (PENDING_TIMEOUT_MS / 1000L) + "s) » CD chạy sau bắn");
         return true;
     }
 
@@ -233,8 +232,7 @@ public class FrostShot extends AbstractSkill {
         cooldownActive.add(player.getUniqueId());
         player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fHàn Sương Bạo Phát!"));
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TRIDENT_THROW, 1f, 1.4f);
-        broadcastDebug(player.getName() + " đã bắn mũi tên mang " + getDisplayName()
-                + " — cooldown chạy từ lúc này.");
+        broadcastDebug(player.getName() + ": Đã bắn » Bắt đầu đếm CD");
     }
 
     public void onProjectileHit(ProjectileHitEvent event) {
@@ -258,8 +256,7 @@ public class FrostShot extends AbstractSkill {
         playImpactEffects(world, center, radius);
         freezeZones.add(new FreezeZone(world, center, radius, until));
 
-        broadcastDebug("Kích trúng tại " + formatLocation(center) + " (bán kính " + radius
-                + ", đóng băng " + freezeTimeMs + "ms).");
+        broadcastDebug("Đích trúng: " + formatLocation(center) + " » R=" + radius + " | T=" + freezeTimeMs + "ms");
     }
 
     private void freezeArea(World world, Location center, int radius, long until) {
@@ -293,7 +290,7 @@ public class FrostShot extends AbstractSkill {
             block.setType(entry.getValue(), false);
         }
 
-        broadcastDebug("Đã đóng băng " + toFreeze.size() + " block.");
+        broadcastDebug("Khoá " + toFreeze.size() + " khối.");
     }
 
     /**
@@ -509,7 +506,7 @@ public class FrostShot extends AbstractSkill {
                         Player player = Bukkit.getPlayer(entry.getKey());
                         if (player != null) {
                             sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &fHàn Ý Giải Trừ!");
-                            broadcastDebug(player.getName() + " hết hạn chờ đợi (15s không bắn).");
+                            broadcastDebug(player.getName() + ": Quá hạn 15s » Hủy chiêu");
                         }
                     }
                 }
@@ -547,13 +544,13 @@ public class FrostShot extends AbstractSkill {
 
                         player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fBăng Tâm Phục Nguyên!"));
                         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1.6f);
-                        broadcastDebug(player.getName() + " cooldown kết thúc.");
+                        broadcastDebug(player.getName() + ": CD hoàn tất");
 
                         // Auto kích hoạt: player đang giữ sneak (sneak) và cầm bow.
                         // Gọi qua Entity để dùng isSneaking() không deprecated.
                         Entity entity = Bukkit.getEntity(uuid);
                         if (entity != null && entity.isSneaking() && isHoldingBow(player)) {
-                            broadcastDebug(player.getName() + " đang sneak + cầm bow — tự kích hoạt.");
+                            broadcastDebug(player.getName() + ": Tự động gồng lại");
                             activate(player);
                         }
                     }
@@ -600,7 +597,7 @@ public class FrostShot extends AbstractSkill {
                 reverted++;
             }
             if (reverted > 0) {
-                broadcastDebug("Đã hoàn nguyên " + reverted + " block.");
+                broadcastDebug("Đã hoàn nguyên " + reverted + " khối.");
             }
         }
         freezeZones.removeIf(zone -> now >= zone.untilMs());
