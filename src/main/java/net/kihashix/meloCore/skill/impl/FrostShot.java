@@ -182,6 +182,7 @@ public class FrostShot extends AbstractSkill {
 
         // Cooldown KHÔNG đếm ở đây — chỉ đếm từ lúc player BẮN (xem onBowShoot)
         // player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fĐã sẵn sàng!"));
+        sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &fBăng Phong Quy Vị!");
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GLASS_STEP, 0.8f, 1.6f);
         broadcastDebug(player.getName() + " đã kích hoạt (chờ bắn cung, hết hạn sau "
                 + (PENDING_TIMEOUT_MS / 1000L) + "s). Cooldown sẽ chạy từ lúc bắn.");
