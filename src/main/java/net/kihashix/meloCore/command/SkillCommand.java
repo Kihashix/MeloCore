@@ -19,19 +19,25 @@ import java.util.stream.Collectors;
 
 public class SkillCommand implements CommandExecutor {
 
-    private static final String USAGE = "/mc skills <give|remove|list|cooldown|toggle|config|info|debug> ...";
+    private static final String USAGE = "/mc <skills|update> ...";
 
     private final SkillManager skillManager;
     private final PlayerSkillData skillData;
+    private final UpdateCommand updateCommand;
 
-    public SkillCommand(SkillManager skillManager, PlayerSkillData skillData) {
+    public SkillCommand(SkillManager skillManager, PlayerSkillData skillData, UpdateCommand updateCommand) {
         this.skillManager = skillManager;
         this.skillData = skillData;
+        this.updateCommand = updateCommand;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String @NotNull [] args) {
+        // Lệnh con update (kiểm tra/tải bản mới) — điều hướng sang UpdateCommand
+        if (args.length > 0 && args[0].equalsIgnoreCase("update")) {
+            return updateCommand.onCommand(sender, args);
+        }
         if (args.length == 0 || !args[0].equalsIgnoreCase("skills")) {
             sender.sendMessage(Component.text("Dùng: " + USAGE, NamedTextColor.RED));
             return true;

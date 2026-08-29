@@ -2,10 +2,12 @@ package net.kihashix.meloCore;
 
 import net.kihashix.meloCore.command.SkillCommand;
 import net.kihashix.meloCore.command.SkillTabCompleter;
+import net.kihashix.meloCore.command.UpdateCommand;
 import net.kihashix.meloCore.data.PlayerSkillData;
 import net.kihashix.meloCore.listener.FrostShotListener;
 import net.kihashix.meloCore.skill.SkillManager;
 import net.kihashix.meloCore.skill.impl.FrostShot;
+import net.kihashix.meloCore.update.UpdateService;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -32,7 +34,8 @@ public final class MeloCore extends JavaPlugin {
 
         PluginCommand mcCommand = getCommand("mc");
         if (mcCommand != null) {
-            mcCommand.setExecutor(new SkillCommand(skillManager, playerSkillData));
+            mcCommand.setExecutor(new SkillCommand(skillManager, playerSkillData,
+                    new UpdateCommand(this, new UpdateService(this))));
             mcCommand.setTabCompleter(new SkillTabCompleter(skillManager));
         } else {
             getLogger().severe("Không tìm thấy lệnh 'mc' trong plugin.yml!");

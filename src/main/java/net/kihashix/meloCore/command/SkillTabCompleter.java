@@ -25,7 +25,12 @@ public class SkillTabCompleter implements TabCompleter {
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                       @NotNull String alias, @NotNull String @NotNull [] args) {
-        if (args.length == 1) return filter(List.of("skills"), args[0]);
+        if (args.length == 1) return filter(List.of("skills", "update"), args[0]);
+        if (args[0].equalsIgnoreCase("update")) {
+            // /mc update <check|download>
+            if (args.length == 2) return filter(List.of("check", "download"), args[1]);
+            return new ArrayList<>();
+        }
         if (args.length == 2) return filter(List.of("give", "remove", "list", "cooldown", "toggle", "config", "info", "debug"), args[1]);
 
         String sub = args[1].toLowerCase();
