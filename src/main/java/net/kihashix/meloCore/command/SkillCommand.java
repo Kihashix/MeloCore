@@ -243,6 +243,6 @@ public class SkillCommand implements CommandExecutor {
         boolean newState = !skill.isDebug();
         skill.setDebug(newState); // KHÔNG saveConfig() -> tự reset về false sau khi restart
         sender.sendMessage(Component.text("Debug " + skill.getId() + " đã "
-                + (newState ? "BẬT" : "TẮT") + " (chỉ tạm thời, không lưu file).", NamedTextColor.LIGHT_PURPLE));
+                + (newState ? "BẬT" : "TẮT"), NamedTextColor.LIGHT_PURPLE));
     }
 }
