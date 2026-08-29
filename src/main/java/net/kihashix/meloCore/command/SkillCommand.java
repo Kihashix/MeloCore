@@ -5,6 +5,7 @@ import net.kihashix.meloCore.skill.Skill;
 import net.kihashix.meloCore.skill.SkillManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -13,6 +14,8 @@ import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 
 public class SkillCommand implements CommandExecutor {
+
+    private static final String USAGE = "/mc skills <give|remove|list|cooldown|toggle|config|info|debug> ...";
 
     private final SkillManager skillManager;
     private final PlayerSkillData skillData;
@@ -26,11 +29,11 @@ public class SkillCommand implements CommandExecutor {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String @NotNull [] args) {
         if (args.length == 0 || !args[0].equalsIgnoreCase("skills")) {
-            sender.sendMessage(Component.text("Dùng: /mc skills <give|remove|list|cooldown|toggle|info|debug> ...", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Dùng: " + USAGE, NamedTextColor.RED));
             return true;
         }
         if (args.length == 1) {
-            sender.sendMessage(Component.text("Thiếu tham số. /mc skills <give|remove|list|cooldown|toggle|info|debug>", NamedTextColor.RED));
+            sender.sendMessage(Component.text("Thiếu tham số. " + USAGE, NamedTextColor.RED));
             return true;
         }
 
@@ -40,6 +43,7 @@ public class SkillCommand implements CommandExecutor {
             case "list" -> handleList(sender);
             case "cooldown" -> handleCooldown(sender, args);
             case "toggle" -> handleToggle(sender, args);
+            case "config" -> handleConfig(sender, args);
             case "info" -> handleInfo(sender, args);
             case "debug" -> handleDebug(sender, args);
             default -> sender.sendMessage(Component.text("Lệnh con không hợp lệ: " + args[1], NamedTextColor.RED));
@@ -57,14 +61,14 @@ public class SkillCommand implements CommandExecutor {
             return;
         }
         OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
-        String skillId = args[3].toLowerCase();
-        if (skillManager.get(skillId).isEmpty()) {
-            sender.sendMessage(Component.text("Không tìm thấy skill: " + skillId, NamedTextColor.RED));
+        Skill skill = skillManager.get(args[3]).orElse(null);
+        if (skill == null) {
+            sender.sendMessage(Component.text("Không tìm thấy skill: " + args[3], NamedTextColor.RED));
             return;
         }
-        boolean added = skillData.addSkill(target.getUniqueId(), skillId);
+        boolean added = skillData.addSkill(target.getUniqueId(), skill.getId());
         sender.sendMessage(added
-                ? Component.text("Đã cấp " + skillId + " cho " + args[2] + ".", NamedTextColor.GREEN)
+                ? Component.text("Đã cấp " + skill.getId() + " cho " + args[2] + ".", NamedTextColor.GREEN)
                 : Component.text(args[2] + " đã có skill này rồi.", NamedTextColor.YELLOW));
     }
 
@@ -78,9 +82,14 @@ public class SkillCommand implements CommandExecutor {
             return;
         }
         OfflinePlayer target = Bukkit.getOfflinePlayer(args[2]);
-        boolean removed = skillData.removeSkill(target.getUniqueId(), args[3].toLowerCase());
+        Skill skill = skillManager.get(args[3]).orElse(null);
+        if (skill == null) {
+            sender.sendMessage(Component.text("Không tìm thấy skill: " + args[3], NamedTextColor.RED));
+            return;
+        }
+        boolean removed = skillData.removeSkill(target.getUniqueId(), skill.getId());
         sender.sendMessage(removed
-                ? Component.text("Đã gỡ " + args[3] + " khỏi " + args[2] + ".", NamedTextColor.GREEN)
+                ? Component.text("Đã gỡ " + skill.getId() + " khỏi " + args[2] + ".", NamedTextColor.GREEN)
                 : Component.text(args[2] + " không có skill này.", NamedTextColor.YELLOW));
     }
 
@@ -97,11 +106,19 @@ public class SkillCommand implements CommandExecutor {
             sender.sendMessage(Component.text()
                     .append(Component.text(" - ", NamedTextColor.GRAY))
                     .append(Component.text(skill.getId(), NamedTextColor.WHITE))
-                    .append(Component.text(" (" + skill.getDisplayName() + ") [", NamedTextColor.GRAY))
+                    .append(Component.text(" (", NamedTextColor.GRAY))
+                    .append(displayName(skill))
+                    .append(Component.text(") [", NamedTextColor.GRAY))
                     .append(status)
                     .append(Component.text("]", NamedTextColor.GRAY))
                     .build());
         }
+    }
+
+    /** Tên hiển thị có tô màu &l (bold) + xanh băng — parse cả mã màu '&' nếu có. */
+    private Component displayName(Skill skill) {
+        return LegacyComponentSerializer.legacyAmpersand()
+                .deserialize("&b&l" + skill.getDisplayName());
     }
 
     private void handleCooldown(CommandSender sender, String[] args) {
@@ -150,6 +167,36 @@ public class SkillCommand implements CommandExecutor {
         sender.sendMessage(Component.text(skill.getId() + " đã " + (newState ? "BẬT" : "TẮT") + ".", NamedTextColor.GREEN));
     }
 
+    private void handleConfig(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("melocore.admin.skills")) {
+            sender.sendMessage(Component.text("Bạn không có quyền.", NamedTextColor.RED));
+            return;
+        }
+        if (args.length < 5 || !args[3].equalsIgnoreCase("radius")) {
+            sender.sendMessage(Component.text("Dùng: /mc skills config <skill> radius <bán kính >= 1>", NamedTextColor.RED));
+            return;
+        }
+        Skill skill = skillManager.get(args[2]).orElse(null);
+        if (skill == null) {
+            sender.sendMessage(Component.text("Không tìm thấy skill: " + args[2], NamedTextColor.RED));
+            return;
+        }
+        int radius;
+        try {
+            radius = Integer.parseInt(args[4]);
+        } catch (NumberFormatException e) {
+            sender.sendMessage(Component.text("<radius> phải là số nguyên.", NamedTextColor.RED));
+            return;
+        }
+        if (radius < 1) {
+            sender.sendMessage(Component.text("Bán kính phải >= 1.", NamedTextColor.RED));
+            return;
+        }
+        skill.setRadius(radius);
+        skillManager.saveConfig();
+        sender.sendMessage(Component.text("Đã đặt bán kính " + skill.getId() + " = " + radius + " block.", NamedTextColor.GREEN));
+    }
+
     private void handleInfo(CommandSender sender, String[] args) {
         if (args.length < 3) {
             sender.sendMessage(Component.text("Dùng: /mc skills info <skill>", NamedTextColor.RED));
@@ -160,13 +207,19 @@ public class SkillCommand implements CommandExecutor {
             sender.sendMessage(Component.text("Không tìm thấy skill: " + args[2], NamedTextColor.RED));
             return;
         }
-        sender.sendMessage(Component.text("== " + skill.getDisplayName() + " (" + skill.getId() + ") ==", NamedTextColor.AQUA));
+        sender.sendMessage(Component.text("== ", NamedTextColor.AQUA)
+                .append(displayName(skill))
+                .append(Component.text(" (" + skill.getId() + ") ==", NamedTextColor.GRAY)));
         sender.sendMessage(Component.text("Trạng thái: ", NamedTextColor.GRAY)
                 .append(skill.isEnabled()
                         ? Component.text("ON", NamedTextColor.GREEN)
                         : Component.text("OFF", NamedTextColor.RED)));
         sender.sendMessage(Component.text("Cooldown: ", NamedTextColor.GRAY)
                 .append(Component.text(skill.getCooldownMs() + "ms", NamedTextColor.WHITE)));
+        if (skill.getRadius() > 0) {
+            sender.sendMessage(Component.text("Bán kính: ", NamedTextColor.GRAY)
+                    .append(Component.text(skill.getRadius() + " block", NamedTextColor.WHITE)));
+        }
         sender.sendMessage(Component.text("Debug: ", NamedTextColor.GRAY)
                 .append(skill.isDebug()
                         ? Component.text("ON", NamedTextColor.GREEN)

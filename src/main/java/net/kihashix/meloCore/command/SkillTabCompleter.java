@@ -25,7 +25,7 @@ public class SkillTabCompleter implements TabCompleter {
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                       @NotNull String alias, @NotNull String @NotNull [] args) {
         if (args.length == 1) return filter(List.of("skills"), args[0]);
-        if (args.length == 2) return filter(List.of("give", "remove", "list", "cooldown", "toggle", "info", "debug"), args[1]);
+        if (args.length == 2) return filter(List.of("give", "remove", "list", "cooldown", "toggle", "config", "info", "debug"), args[1]);
 
         String sub = args[1].toLowerCase();
         switch (sub) {
@@ -36,6 +36,16 @@ public class SkillTabCompleter implements TabCompleter {
             case "toggle" -> {
                 if (args.length == 3) return filter(skillIds(), args[2]);
                 if (args.length == 4) return filter(List.of("on", "off"), args[3]);
+            }
+            case "config" -> {
+                if (args.length == 3) return filter(skillIds(), args[2]);
+                if (args.length == 4) return filter(List.of("radius"), args[3]);
+                if (args.length == 5) {
+                    // Gợi ý bán kính hiện tại của skill
+                    return skillManager.get(args[2].toLowerCase())
+                            .map(s -> filter(List.of(String.valueOf(s.getRadius())), args[4]))
+                            .orElse(new ArrayList<>());
+                }
             }
             case "info", "debug" -> {
                 if (args.length == 3) return filter(skillIds(), args[2]);

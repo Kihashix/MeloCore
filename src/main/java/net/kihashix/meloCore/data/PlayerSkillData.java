@@ -64,6 +64,19 @@ public class PlayerSkillData {
         }
     }
 
+    /** Đổi id một skill trong toàn bộ dữ liệu player (vd di trú "hanbangchitien" -> "frostshot"). */
+    public void renameSkill(String oldId, String newId) {
+        if (oldId.equalsIgnoreCase(newId)) return;
+        boolean changed = false;
+        for (Set<String> skills : cache.values()) {
+            if (skills.remove(oldId)) {
+                skills.add(newId);
+                changed = true;
+            }
+        }
+        if (changed) save();
+    }
+
     public boolean hasSkill(UUID uuid, String skillId) {
         return cache.getOrDefault(uuid, Collections.emptySet()).contains(skillId);
     }

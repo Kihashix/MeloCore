@@ -22,6 +22,7 @@ public abstract class AbstractSkill implements Skill {
     private long cooldownMs;
     private boolean enabled = true;
     private boolean debug = false;
+    private int radius = 0;
 
     // Lưu mốc thời gian kích hoạt gần nhất của từng player
     private final Map<UUID, Long> lastActivation = new HashMap<>();
@@ -31,6 +32,11 @@ public abstract class AbstractSkill implements Skill {
         this.id = id;
         this.displayName = displayName;
         this.cooldownMs = defaultCooldownMs;
+    }
+
+    /** Parse chuỗi mã màu dạng '&' (vd: "&b&lTên skill &7- &f3.2s") sang Component. */
+    protected Component color(String message) {
+        return LEGACY_AMPERSAND.deserialize(message);
     }
 
     @Override
@@ -71,6 +77,16 @@ public abstract class AbstractSkill implements Skill {
     @Override
     public void setDebug(boolean debug) {
         this.debug = debug;
+    }
+
+    @Override
+    public int getRadius() {
+        return radius;
+    }
+
+    @Override
+    public void setRadius(int radius) {
+        this.radius = Math.max(radius, 0);
     }
 
     /** Số ms còn lại của cooldown. 0 nếu đã sẵn sàng dùng. */

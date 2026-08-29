@@ -3,9 +3,9 @@ package net.kihashix.meloCore;
 import net.kihashix.meloCore.command.SkillCommand;
 import net.kihashix.meloCore.command.SkillTabCompleter;
 import net.kihashix.meloCore.data.PlayerSkillData;
-import net.kihashix.meloCore.listener.HanBangChiTienListener;
+import net.kihashix.meloCore.listener.FrostShotListener;
 import net.kihashix.meloCore.skill.SkillManager;
-import net.kihashix.meloCore.skill.impl.HanBangChiTien;
+import net.kihashix.meloCore.skill.impl.FrostShot;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -19,12 +19,16 @@ public final class MeloCore extends JavaPlugin {
         this.skillManager = new SkillManager(this);
         this.playerSkillData = new PlayerSkillData(this);
 
-        HanBangChiTien hanBangChiTien = new HanBangChiTien(this);
-        skillManager.register(hanBangChiTien);
+        // Di trú dữ liệu từ id cũ "hanbangchitien" (và "frostshot" nếu có) -> "FrostShot"
+        playerSkillData.renameSkill("hanbangchitien", FrostShot.ID);
+        playerSkillData.renameSkill("frostshot", FrostShot.ID);
+
+        FrostShot frostShot = new FrostShot(this);
+        skillManager.register(frostShot);
         skillManager.loadConfig();
 
         getServer().getPluginManager().registerEvents(
-                new HanBangChiTienListener(hanBangChiTien, playerSkillData, this), this);
+                new FrostShotListener(frostShot, playerSkillData, this), this);
 
         PluginCommand mcCommand = getCommand("mc");
         if (mcCommand != null) {

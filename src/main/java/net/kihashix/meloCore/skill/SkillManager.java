@@ -2,6 +2,7 @@ package net.kihashix.meloCore.skill;
 
 import net.kihashix.meloCore.MeloCore;
 import net.kihashix.meloCore.data.PlayerSkillData;
+import net.kihashix.meloCore.skill.impl.FrostShot;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -29,8 +30,14 @@ public class SkillManager {
         skills.put(skill.getId(), skill);
     }
 
+    /** Tìm skill theo id — khớp chính xác trước, sau đó khớp không phân biệt hoa thường. */
     public Optional<Skill> get(String id) {
-        return Optional.ofNullable(skills.get(id));
+        Skill exact = skills.get(id);
+        if (exact != null) return Optional.of(exact);
+        for (Skill skill : skills.values()) {
+            if (skill.getId().equalsIgnoreCase(id)) return Optional.of(skill);
+        }
+        return Optional.empty();
     }
 
     public Map<String, Skill> getAll() {
@@ -52,9 +59,19 @@ public class SkillManager {
             }
         }
         config = YamlConfiguration.loadConfiguration(configFile);
+
+        // Di trú cấu hình từ id cũ "hanbangchitien" (và "frostshot" nếu có) -> "FrostShot"
+        if (config.contains("hanbangchitien") && !config.contains(FrostShot.ID)) {
+            config.set(FrostShot.ID + ".cooldown-ms", config.get("hanbangchitien.cooldown-ms"));
+            config.set(FrostShot.ID + ".enabled", config.get("hanbangchitien.enabled"));
+        }
+        config.set("hanbangchitien", null); // xóa section cũ
+        config.set("frostshot", null);
+
         for (Skill skill : skills.values()) {
             skill.setCooldownMs(config.getLong(skill.getId() + ".cooldown-ms", skill.getCooldownMs()));
             skill.setEnabled(config.getBoolean(skill.getId() + ".enabled", skill.isEnabled()));
+            skill.setRadius(config.getInt(skill.getId() + ".radius", skill.getRadius()));
         }
     }
 
@@ -63,6 +80,9 @@ public class SkillManager {
         for (Skill skill : skills.values()) {
             config.set(skill.getId() + ".cooldown-ms", skill.getCooldownMs());
             config.set(skill.getId() + ".enabled", skill.isEnabled());
+            if (skill.getRadius() > 0) {
+                config.set(skill.getId() + ".radius", skill.getRadius());
+            }
         }
         try {
             config.save(configFile);
@@ -86,7 +106,7 @@ public class SkillManager {
                         long remaining = abstractSkill.getRemainingCooldownMs(player);
                         if (remaining <= 0) continue;
                         abstractSkill.sendActionBar(player,
-                                "&b" + skill.getDisplayName() + " &7- &f" + String.format("%.1f", remaining / 1000.0) + "s");
+                                "&b&l" + skill.getDisplayName() + " &8» &f&l" + String.format("%.1f", remaining / 1000.0) + "s");
                     }
                 }
             }

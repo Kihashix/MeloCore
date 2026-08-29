@@ -8,7 +8,7 @@ load: POSTWORLD
 commands:
   mc:
     description: Lenh chinh cua MeloCore
-    usage: /mc skills <give|remove|list|cooldown|toggle|info|debug> ...
+    usage: /mc skills <give|remove|list|cooldown|toggle|config|info|debug> ...
 
 permissions:
   melocore.admin.skills:
