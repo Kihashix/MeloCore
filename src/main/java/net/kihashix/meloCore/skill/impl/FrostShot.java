@@ -257,7 +257,7 @@ public class FrostShot extends AbstractSkill {
         playImpactEffects(world, center, radius);
         freezeZones.add(new FreezeZone(world, center, radius, until));
 
-        broadcastDebug("Impact tại " + formatLocation(center) + " (bán kính " + radius
+        broadcastDebug("Kích trúng tại " + formatLocation(center) + " (bán kính " + radius
                 + ", đóng băng " + freezeTimeMs + "ms).");
     }
 
@@ -508,7 +508,7 @@ public class FrostShot extends AbstractSkill {
                         Player player = Bukkit.getPlayer(entry.getKey());
                         if (player != null) {
                             sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &fHàn Ý Giải Trừ!");
-                            broadcastDebug(player.getName() + " hết hạn pending (15s không bắn).");
+                            broadcastDebug(player.getName() + " hết hạn chờ đợi (15s không bắn).");
                         }
                     }
                 }
