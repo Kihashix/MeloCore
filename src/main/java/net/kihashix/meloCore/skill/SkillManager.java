@@ -30,6 +30,16 @@ public class SkillManager {
         skills.put(skill.getId(), skill);
     }
 
+    /**
+     * Gọi khi plugin disable — để các skill hoàn tác thay đổi tạm thời lên
+     * player/world (vd: khôi phục attribute, hoàn nguyên block đóng băng).
+     */
+    public void shutdown() {
+        for (Skill skill : skills.values()) {
+            skill.shutdown();
+        }
+    }
+
     /** Tìm skill theo id — khớp chính xác trước, sau đó khớp không phân biệt hoa thường. */
     public Optional<Skill> get(String id) {
         Skill exact = skills.get(id);
@@ -71,7 +81,11 @@ public class SkillManager {
         for (Skill skill : skills.values()) {
             skill.setCooldownMs(config.getLong(skill.getId() + ".cooldown-ms", skill.getCooldownMs()));
             skill.setEnabled(config.getBoolean(skill.getId() + ".enabled", skill.isEnabled()));
-            skill.setRadius(config.getInt(skill.getId() + ".radius", skill.getRadius()));
+            // Các option riêng của skill (radius, freeze-time, slowness...) —
+            // giá trị thiếu/không hợp lệ sẽ giữ nguyên default của skill.
+            for (SkillConfigOption option : skill.getConfigOptions()) {
+                option.load(config, skill.getId() + "." + option.getKey());
+            }
         }
     }
 
@@ -80,8 +94,8 @@ public class SkillManager {
         for (Skill skill : skills.values()) {
             config.set(skill.getId() + ".cooldown-ms", skill.getCooldownMs());
             config.set(skill.getId() + ".enabled", skill.isEnabled());
-            if (skill.getRadius() > 0) {
-                config.set(skill.getId() + ".radius", skill.getRadius());
+            for (SkillConfigOption option : skill.getConfigOptions()) {
+                config.set(skill.getId() + "." + option.getKey(), option.currentValue());
             }
         }
         try {

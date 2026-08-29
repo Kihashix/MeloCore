@@ -2,6 +2,7 @@ package net.kihashix.meloCore.command;
 
 import net.kihashix.meloCore.data.PlayerSkillData;
 import net.kihashix.meloCore.skill.Skill;
+import net.kihashix.meloCore.skill.SkillConfigOption;
 import net.kihashix.meloCore.skill.SkillManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -12,6 +13,9 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 public class SkillCommand implements CommandExecutor {
 
@@ -172,8 +176,8 @@ public class SkillCommand implements CommandExecutor {
             sender.sendMessage(Component.text("Bạn không có quyền.", NamedTextColor.RED));
             return;
         }
-        if (args.length < 5 || !args[3].equalsIgnoreCase("radius")) {
-            sender.sendMessage(Component.text("Dùng: /mc skills config <skill> radius <bán kính >= 1>", NamedTextColor.RED));
+        if (args.length < 5) {
+            sender.sendMessage(Component.text("Dùng: /mc skills config <skill> <option> <giá trị>", NamedTextColor.RED));
             return;
         }
         Skill skill = skillManager.get(args[2]).orElse(null);
@@ -181,20 +185,51 @@ public class SkillCommand implements CommandExecutor {
             sender.sendMessage(Component.text("Không tìm thấy skill: " + args[2], NamedTextColor.RED));
             return;
         }
-        int radius;
-        try {
-            radius = Integer.parseInt(args[4]);
-        } catch (NumberFormatException e) {
-            sender.sendMessage(Component.text("<radius> phải là số nguyên.", NamedTextColor.RED));
+        SkillConfigOption option = skill.getOption(args[3]).orElse(null);
+        if (option == null) {
+            String keys = skill.getConfigOptions().stream()
+                    .map(SkillConfigOption::getKey)
+                    .collect(Collectors.joining(", "));
+            sender.sendMessage(Component.text("Skill " + skill.getId() + " không có option '" + args[3]
+                    + "'. Khả dụng: " + (keys.isEmpty() ? "(không có)" : keys), NamedTextColor.RED));
             return;
         }
-        if (radius < 1) {
-            sender.sendMessage(Component.text("Bán kính phải >= 1.", NamedTextColor.RED));
+        // Parse + kiểm tra giới hạn + áp dụng — lỗi trả về dưới dạng thông báo
+        String error = option.apply(args[4]);
+        if (error != null) {
+            sender.sendMessage(Component.text(error, NamedTextColor.RED));
             return;
         }
-        skill.setRadius(radius);
         skillManager.saveConfig();
-        sender.sendMessage(Component.text("Đã đặt bán kính " + skill.getId() + " = " + radius + " block.", NamedTextColor.GREEN));
+        sender.sendMessage(Component.text("Đã đặt " + option.getKey() + " của " + skill.getId()
+                + " = " + describeValue(option) + ".", NamedTextColor.GREEN));
+    }
+
+    /**
+     * Giá trị kèm giải thích thân thiện cho các option quen thuộc
+     * (chỉ phần hiển thị — giá trị lưu/đặt vẫn là số gốc).
+     */
+    private String describeValue(SkillConfigOption option) {
+        String value = option.getValue();
+        switch (option.getKey()) {
+            case "slowness" -> {
+                // amplifier 0-based -> hiển thị cấp La Mã (3 = Slowness IV)
+                return value + " (Slowness " + roman((int) Long.parseLong(value) + 1) + ")";
+            }
+            case "freeze-time" -> {
+                return value + " (" + String.format(Locale.ROOT, "%.1f", Long.parseLong(value) / 1000.0) + "s)";
+            }
+            default -> {
+                return value;
+            }
+        }
+    }
+
+    private static final String[] ROMAN = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"};
+
+    /** Số La Mã 1..11 (slowness amplifier tối đa 10 -> cấp tối đa XI). */
+    private static String roman(int level) {
+        return level >= 1 && level <= ROMAN.length ? ROMAN[level - 1] : String.valueOf(level);
     }
 
     private void handleInfo(CommandSender sender, String[] args) {
@@ -216,9 +251,10 @@ public class SkillCommand implements CommandExecutor {
                         : Component.text("OFF", NamedTextColor.RED)));
         sender.sendMessage(Component.text("Cooldown: ", NamedTextColor.GRAY)
                 .append(Component.text(skill.getCooldownMs() + "ms", NamedTextColor.WHITE)));
-        if (skill.getRadius() > 0) {
-            sender.sendMessage(Component.text("Bán kính: ", NamedTextColor.GRAY)
-                    .append(Component.text(skill.getRadius() + " block", NamedTextColor.WHITE)));
+        // Các option cấu hình riêng của skill (radius, freeze-time, slowness...)
+        for (SkillConfigOption option : skill.getConfigOptions()) {
+            sender.sendMessage(Component.text(option.getLabel() + ": ", NamedTextColor.GRAY)
+                    .append(Component.text(describeValue(option), NamedTextColor.WHITE)));
         }
         sender.sendMessage(Component.text("Debug: ", NamedTextColor.GRAY)
                 .append(skill.isDebug()

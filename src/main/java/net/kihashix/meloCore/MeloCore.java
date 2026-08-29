@@ -45,7 +45,13 @@ public final class MeloCore extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        if (skillManager != null) skillManager.saveConfig();
+        // shutdown() TRƯỚC saveConfig(): các skill hoàn tác thay đổi tạm thời
+        // (khôi phục JUMP_STRENGTH đang = 0, hoàn nguyên block băng) — nếu không,
+        // playerdata sẽ lưu jump_strength = 0 và block băng mắc vĩnh viễn.
+        if (skillManager != null) {
+            skillManager.shutdown();
+            skillManager.saveConfig();
+        }
         if (playerSkillData != null) playerSkillData.save();
     }
 }

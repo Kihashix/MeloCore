@@ -42,17 +42,17 @@ public class FrostShotListener implements Listener {
 
     @EventHandler
     public void onDeath(PlayerDeathEvent event) {
-        // Player chết -> hủy trạng thái sẵn sàng (bow rơi, không còn ngữ cảnh)
-        Player player = event.getEntity().getPlayer();
-        if (player != null) {
-            skill.clearPending(player);
-        }
+        // Player chết -> hủy trạng thái sẵn sàng (bow rơi) + khôi phục jump
+        // strength nếu đang bị đóng băng (đồng bộ với Slowness bị clear khi chết)
+        skill.clearPlayerState(event.getEntity());
     }
 
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        // Player rời game -> hủy trạng thái sẵn sàng (in-memory, tránh leak)
-        skill.clearPending(event.getPlayer());
+        // Player rời game -> hủy trạng thái theo dõi. BẮT BUỘC khôi phục jump
+        // strength TRƯỚC khi playerdata được ghi, nếu không jump_strength = 0
+        // sẽ bị lưu vĩnh viễn (player mất khả năng nhảy).
+        skill.clearPlayerState(event.getPlayer());
     }
 
     @EventHandler

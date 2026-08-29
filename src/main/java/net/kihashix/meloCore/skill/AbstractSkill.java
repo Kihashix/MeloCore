@@ -8,6 +8,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -22,7 +25,13 @@ public abstract class AbstractSkill implements Skill {
     private long cooldownMs;
     private boolean enabled = true;
     private boolean debug = false;
-    private int radius = 0;
+
+    /**
+     * Registry các tùy chọn cấu hình của skill — dùng chung cho lệnh
+     * /mc skills config, tab-complete, /mc skills info và skills.yml.
+     * LinkedHashMap để giữ thứ tự đăng ký (ổn định khi hiển thị).
+     */
+    private final Map<String, SkillConfigOption> options = new LinkedHashMap<>();
 
     // Lưu mốc thời gian kích hoạt gần nhất của từng player
     private final Map<UUID, Long> lastActivation = new HashMap<>();
@@ -37,6 +46,20 @@ public abstract class AbstractSkill implements Skill {
     /** Parse chuỗi mã màu dạng '&' (vd: "&b&lTên skill &7- &f3.2s") sang Component. */
     protected Component color(String message) {
         return LEGACY_AMPERSAND.deserialize(message);
+    }
+
+    /** Đăng ký tùy chọn cấu hình — gọi trong constructor của skill con. */
+    protected void registerOption(SkillConfigOption option) {
+        String key = option.getKey().toLowerCase(Locale.ROOT);
+        if (options.containsKey(key)) {
+            throw new IllegalArgumentException("Skill " + id + " đăng ký trùng option '" + option.getKey() + "'.");
+        }
+        options.put(key, option);
+    }
+
+    @Override
+    public List<SkillConfigOption> getConfigOptions() {
+        return List.copyOf(options.values());
     }
 
     @Override
@@ -77,16 +100,6 @@ public abstract class AbstractSkill implements Skill {
     @Override
     public void setDebug(boolean debug) {
         this.debug = debug;
-    }
-
-    @Override
-    public int getRadius() {
-        return radius;
-    }
-
-    @Override
-    public void setRadius(int radius) {
-        this.radius = Math.max(radius, 0);
     }
 
     /** Số ms còn lại của cooldown. 0 nếu đã sẵn sàng dùng. */
