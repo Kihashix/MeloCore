@@ -128,7 +128,7 @@ public abstract class AbstractSkill implements Skill {
     protected void broadcastDebug(String message) {
         if (!debug) return;
         Component formatted = Component.text()
-                .append(Component.text("[Debug:" + id + "] ", NamedTextColor.GRAY))
+                .append(Component.text("[Debug: " + id + "] ", NamedTextColor.LIGHT_PURPLE))
                 .append(Component.text(message))
                 .build();
         for (Player admin : Bukkit.getOnlinePlayers()) {
