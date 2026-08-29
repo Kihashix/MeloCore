@@ -24,7 +24,7 @@ public final class MeloCore extends JavaPlugin {
         skillManager.loadConfig();
 
         getServer().getPluginManager().registerEvents(
-                new HanBangChiTienListener(hanBangChiTien, playerSkillData), this);
+                new HanBangChiTienListener(hanBangChiTien, playerSkillData, this), this);
 
         PluginCommand mcCommand = getCommand("mc");
         if (mcCommand != null) {
@@ -43,13 +43,5 @@ public final class MeloCore extends JavaPlugin {
     public void onDisable() {
         if (skillManager != null) skillManager.saveConfig();
         if (playerSkillData != null) playerSkillData.save();
-    }
-
-    public SkillManager getSkillManager() {
-        return skillManager;
-    }
-
-    public PlayerSkillData getPlayerSkillData() {
-        return playerSkillData;
     }
 }

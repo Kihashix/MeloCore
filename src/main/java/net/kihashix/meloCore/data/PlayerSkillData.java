@@ -1,5 +1,6 @@
 package net.kihashix.meloCore.data;
 
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -23,21 +24,32 @@ public class PlayerSkillData {
     }
 
     public void load() {
-        if (!file.exists()) {
-            plugin.getDataFolder().mkdirs();
-            try {
-                file.createNewFile();
-            } catch (IOException e) {
-                plugin.getLogger().severe("Không thể tạo playerskills.yml: " + e.getMessage());
-            }
-        }
+        ensureFileExists();
         config = YamlConfiguration.loadConfiguration(file);
         cache.clear();
-        if (config.isConfigurationSection("players")) {
-            for (String uuidStr : config.getConfigurationSection("players").getKeys(false)) {
+        ConfigurationSection section = config.getConfigurationSection("players");
+        if (section != null) {
+            for (String uuidStr : section.getKeys(false)) {
                 cache.put(UUID.fromString(uuidStr),
                         new HashSet<>(config.getStringList("players." + uuidStr)));
             }
+        }
+    }
+
+    /** Tạo file dữ liệu nếu chưa có; log severe và bỏ qua khi hệ thống file lỗi. */
+    private void ensureFileExists() {
+        if (file.exists()) return;
+        File folder = plugin.getDataFolder();
+        if (!folder.exists() && !folder.mkdirs()) {
+            plugin.getLogger().severe("Không thể tạo thư mục dữ liệu: " + folder.getAbsolutePath());
+            return;
+        }
+        try {
+            if (!file.createNewFile() && !file.exists()) {
+                plugin.getLogger().severe("Không thể tạo playerskills.yml: " + file.getAbsolutePath());
+            }
+        } catch (IOException e) {
+            plugin.getLogger().severe("Không thể tạo playerskills.yml: " + e.getMessage());
         }
     }
 

@@ -6,6 +6,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +22,8 @@ public class SkillTabCompleter implements TabCompleter {
     }
 
     @Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
+                                      @NotNull String alias, @NotNull String @NotNull [] args) {
         if (args.length == 1) return filter(List.of("skills"), args[0]);
         if (args.length == 2) return filter(List.of("give", "remove", "list", "cooldown", "toggle", "info", "debug"), args[1]);
 
@@ -57,7 +60,7 @@ public class SkillTabCompleter implements TabCompleter {
     }
 
     private List<String> playerNames() {
-        return Bukkit.getOnlinePlayers().stream().map(p -> p.getName()).collect(Collectors.toList());
+        return Bukkit.getOnlinePlayers().stream().map(Player::getName).collect(Collectors.toList());
     }
 
     private List<String> filter(List<String> options, String current) {

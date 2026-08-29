@@ -2,6 +2,8 @@ package net.kihashix.meloCore.skill.impl;
 
 import net.kihashix.meloCore.MeloCore;
 import net.kihashix.meloCore.skill.AbstractSkill;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
@@ -35,7 +37,7 @@ public class HanBangChiTien extends AbstractSkill {
     private final Map<String, BlockData> frozenBlocks = new HashMap<>();
 
     public HanBangChiTien(MeloCore plugin) {
-        super(ID, "Hàn Băng Chi Tiễn", 10_000L); // cooldown mặc định 10s
+        super(plugin, ID, "Hàn Băng Chi Tiễn", 10_000L); // cooldown mặc định 10s
         this.plugin = plugin;
         this.arrowTagKey = new NamespacedKey(plugin, "hbct_tagged");
     }
@@ -43,11 +45,11 @@ public class HanBangChiTien extends AbstractSkill {
     @Override
     public boolean activate(Player player) {
         if (!isEnabled()) {
-            player.sendMessage(ChatColor.RED + getDisplayName() + " hiện đang bị tắt.");
+            player.sendMessage(Component.text(getDisplayName() + " hiện đang bị tắt.", NamedTextColor.RED));
             return false;
         }
         if (isOnCooldown(player)) {
-            player.sendMessage(ChatColor.RED + "Còn " + formatSeconds(getRemainingCooldownMs(player)) + "s cooldown.");
+            player.sendMessage(Component.text("Còn " + formatSeconds(getRemainingCooldownMs(player)) + "s cooldown.", NamedTextColor.RED));
             return false;
         }
 
@@ -55,7 +57,10 @@ public class HanBangChiTien extends AbstractSkill {
         startCooldown(player);
         pendingPlayers.add(player.getUniqueId());
 
-        player.sendMessage(ChatColor.AQUA + getDisplayName() + ChatColor.GRAY + " sẵn sàng — bắn cung để kích hoạt!");
+        player.sendMessage(Component.text()
+                .append(Component.text(getDisplayName(), NamedTextColor.AQUA))
+                .append(Component.text(" sẵn sàng — bắn cung để kích hoạt!", NamedTextColor.GRAY))
+                .build());
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GLASS_STEP, 0.8f, 1.6f);
         broadcastDebug(player.getName() + " đã kích hoạt (chờ bắn cung). Cooldown bắt đầu chạy.");
         return true;

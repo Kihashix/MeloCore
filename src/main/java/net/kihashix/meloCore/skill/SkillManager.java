@@ -39,9 +39,14 @@ public class SkillManager {
 
     public void loadConfig() {
         if (!configFile.exists()) {
-            plugin.getDataFolder().mkdirs();
+            File folder = plugin.getDataFolder();
+            if (!folder.exists() && !folder.mkdirs()) {
+                plugin.getLogger().severe("Không thể tạo thư mục dữ liệu: " + folder.getAbsolutePath());
+            }
             try {
-                configFile.createNewFile();
+                if (!configFile.createNewFile() && !configFile.exists()) {
+                    plugin.getLogger().severe("Không thể tạo skills.yml: " + configFile.getAbsolutePath());
+                }
             } catch (IOException e) {
                 plugin.getLogger().severe("Không thể tạo skills.yml: " + e.getMessage());
             }
@@ -54,6 +59,7 @@ public class SkillManager {
     }
 
     public void saveConfig() {
+        if (config == null) config = YamlConfiguration.loadConfiguration(configFile); // phòng hợp loadConfig() chưa chạy
         for (Skill skill : skills.values()) {
             config.set(skill.getId() + ".cooldown-ms", skill.getCooldownMs());
             config.set(skill.getId() + ".enabled", skill.isEnabled());

@@ -64,5 +64,12 @@
             <version>1.21.11-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
+        <!-- @NotNull/@Nullable — paper-api tham chiếu nhưng khai báo lại để IDE luôn resolve được -->
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+            <version>26.0.2</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

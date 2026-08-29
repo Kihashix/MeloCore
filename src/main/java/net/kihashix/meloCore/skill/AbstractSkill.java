@@ -1,10 +1,11 @@
 package net.kihashix.meloCore.skill;
 
-import net.md_5.bungee.api.ChatMessageType;
-import net.md_5.bungee.api.chat.TextComponent;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,6 +13,10 @@ import java.util.UUID;
 
 public abstract class AbstractSkill implements Skill {
 
+    /** Parse chuỗi màu dạng '&' (vd: "&bTên skill &7- &f3.2s") sang Component. */
+    private static final LegacyComponentSerializer LEGACY_AMPERSAND = LegacyComponentSerializer.legacyAmpersand();
+
+    private final Plugin plugin;
     private final String id;
     private final String displayName;
     private long cooldownMs;
@@ -21,7 +26,8 @@ public abstract class AbstractSkill implements Skill {
     // Lưu mốc thời gian kích hoạt gần nhất của từng player
     private final Map<UUID, Long> lastActivation = new HashMap<>();
 
-    protected AbstractSkill(String id, String displayName, long defaultCooldownMs) {
+    protected AbstractSkill(Plugin plugin, String id, String displayName, long defaultCooldownMs) {
+        this.plugin = plugin;
         this.id = id;
         this.displayName = displayName;
         this.cooldownMs = defaultCooldownMs;
@@ -86,19 +92,22 @@ public abstract class AbstractSkill implements Skill {
 
     /** Hiển thị lên action bar — dùng cho cả cooldown display (luôn bật, không phụ thuộc debug). */
     public void sendActionBar(Player player, String message) {
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR,
-                TextComponent.fromLegacyText(ChatColor.translateAlternateColorCodes('&', message)));
+        player.sendActionBar(LEGACY_AMPERSAND.deserialize(message));
     }
 
     /** Gửi cho toàn bộ admin có quyền debug + log console. Chỉ hoạt động khi debug đang bật. */
     protected void broadcastDebug(String message) {
         if (!debug) return;
-        String formatted = ChatColor.GRAY + "[Debug:" + id + "] " + ChatColor.RESET + message;
+        Component formatted = Component.text()
+                .append(Component.text("[Debug:" + id + "] ", NamedTextColor.GRAY))
+                .append(Component.text(message))
+                .build();
         for (Player admin : Bukkit.getOnlinePlayers()) {
             if (admin.hasPermission("melocore.admin.debug")) {
                 admin.sendMessage(formatted);
             }
         }
-        Bukkit.getLogger().info("[MeloCore][" + id + "] " + ChatColor.stripColor(message));
+        // message luôn là chuỗi thuần (không mã màu) nên log trực tiếp
+        plugin.getLogger().info("[MeloCore][" + id + "] " + message);
     }
 }
