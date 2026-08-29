@@ -11,11 +11,13 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.entity.ProjectileHitEvent;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.BoundingBox;
+import org.bukkit.util.Vector;
 import org.bukkit.util.VoxelShape;
 
 import java.util.*;
@@ -23,13 +25,21 @@ import java.util.*;
 /**
  * Frost Shot (Hàn Băng Chí Tiễn).
  * <p>
- * Shift để sẵn sàng, bắn cung để đóng băng vùng trúng đích:
+ * Shift khi đang cầm bow (mainhand hoặc offhand) để sẵn sàng — trạng thái này
+ * tự hết hạn sau {@link #PENDING_TIMEOUT_MS} nếu không bắn. Bắn cung để đóng
+ * băng vùng trúng đích:
  * <ul>
  *   <li>Nước -> Blue Ice</li>
  *   <li>Lava -> Obsidian</li>
  *   <li>Block full (khối đầy) -> Packed Ice</li>
  *   <li>Block không full (slab, thảm, cây, ...) -> Ice</li>
  * </ul>
+ * Cooldown chỉ bắt đầu đếm khi mũi tên TRÚNG ĐÍCH và freeze xảy ra (không phải
+ * lúc shift) — nhờ đó không còn trường hợp "shift, đợi cooldown hết, bắn tên 1,
+ * shift lại, bắn tên 2" như bản cũ.
+ * Trong {@link #FREEZE_DURATION_MS} (Slowness IV), người chơi KHÔNG THỂ NHẢY:
+ * cú nhảy mới bị triệt tiêu ngay, còn đang giữa không trung khi bị freeze thì
+ * rơi tự nhiên theo trọng lực.
  * Các block bị đóng băng sẽ hoàn nguyên sau {@link #FREEZE_DURATION_MS}.
  */
 public class FrostShot extends AbstractSkill {
@@ -43,6 +53,9 @@ public class FrostShot extends AbstractSkill {
     private static final long FREEZE_DURATION_MS = 5_000L;
     private static final int SLOWNESS_AMPLIFIER = 3; // Slowness IV
     private static final long SLOWNESS_DURATION_TICKS = 5 * 20L;
+
+    /** Trạng thái "sẵn sàng" sau shift chỉ còn hiệu lực trong 15s; quá hạn phải shift lại. */
+    private static final long PENDING_TIMEOUT_MS = 15_000L;
 
     /** Block đặc biệt không bao giờ bị đóng băng (bedrock, portal, block admin...). */
     private static final Set<Material> PROTECTED = Set.of(
@@ -63,15 +76,26 @@ public class FrostShot extends AbstractSkill {
     private final MeloCore plugin;
     private final NamespacedKey arrowTagKey;
 
-    private final Set<UUID> pendingPlayers = new HashSet<>();
+    /** uuid -> thời điểm (ms) kích hoạt (shift + cầm bow). Bắn cung thì xóa. */
+    private final Map<UUID, Long> pending = new HashMap<>();
+
     // key = "world:x:y:z" -> BlockState gốc trước khi bị đóng băng (giữ cả dữ liệu tile entity như rương, bảng...)
     private final Map<String, BlockState> frozenBlocks = new HashMap<>();
+
+    /** uuid -> ms hết hạn "không được nhảy" (chỉ player, song song với 5s Slowness IV). */
+    private final Map<UUID, Long> frozenNoJump = new HashMap<>();
+    /** uuid -> lần kiểm tra trước đó có đang đứng đất không (để nhận diện cú nhảy MỚI). */
+    private final Map<UUID, Boolean> wasOnGround = new HashMap<>();
+
+    /** Bộ đếm tick của task housekeeping (chỉ task chạy trên main thread chạm vào). */
+    private int housekeepingTicks;
 
     public FrostShot(MeloCore plugin) {
         super(plugin, ID, "Hàn Băng Chí Tiễn", 10_000L); // cooldown mặc định 10s
         this.plugin = plugin;
         this.arrowTagKey = new NamespacedKey(plugin, "frostshot_tagged");
         setRadius(DEFAULT_RADIUS);
+        startHousekeepingTask();
     }
 
     @Override
@@ -85,19 +109,47 @@ public class FrostShot extends AbstractSkill {
                     + formatSeconds(getRemainingCooldownMs(player)) + "s &7cooldown."));
             return false;
         }
+        // Điều kiện kích hoạt mới: phải đang cầm bow ở mainhand HOẶC offhand
+        if (!isHoldingBow(player)) {
+            return false; // im lặng — không spam khi player chỉ lủi đi bình thường
+        }
 
-        // Đếm cooldown NGAY lúc kích hoạt (shift), theo yêu cầu
-        startCooldown(player);
-        pendingPlayers.add(player.getUniqueId());
+        Long activatedAt = pending.get(player.getUniqueId());
+        if (activatedAt != null && System.currentTimeMillis() - activatedAt < PENDING_TIMEOUT_MS) {
+            // Đã sẵn sàng và chưa hết hạn: giữ nguyên, không phát lại sound/message
+            broadcastDebug(player.getName() + " shift lần nữa — vẫn đang sẵn sàng, giữ trạng thái.");
+            return true;
+        }
 
+        pending.put(player.getUniqueId(), System.currentTimeMillis());
+
+        // Cooldown KHÔNG đếm ở đây nữa — chỉ đếm từ lúc freeze (xem onProjectileHit)
         player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fĐã sẵn sàng! &7Bắn cung để đóng băng mục tiêu."));
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GLASS_STEP, 0.8f, 1.6f);
-        broadcastDebug(player.getName() + " đã kích hoạt (chờ bắn cung). Cooldown bắt đầu chạy.");
+        broadcastDebug(player.getName() + " đã kích hoạt (chờ bắn cung, hết hạn sau "
+                + (PENDING_TIMEOUT_MS / 1000L) + "s). Cooldown sẽ chạy từ lúc freeze.");
         return true;
     }
 
+    /**
+     * Player có đang cầm bow ở mainhand hoặc offhand không.
+     * Dùng ItemStack từ inventory (luôn @NotNull, trả AIR nếu trống) — không qua Equipment.
+     */
+    private boolean isHoldingBow(Player player) {
+        PlayerInventory inv = player.getInventory();
+        return inv.getItemInMainHand().getType() == Material.BOW
+                || inv.getItemInOffHand().getType() == Material.BOW;
+    }
+
+    /** Hủy trạng thái sẵn sàng — gọi khi player chết hoặc rời game. */
+    public void clearPending(Player player) {
+        pending.remove(player.getUniqueId());
+    }
+
     public void onBowShoot(EntityShootBowEvent event, Player player) {
-        if (!pendingPlayers.remove(player.getUniqueId())) return;
+        if (event.isCancelled()) return; // bắn bị hủy -> giữ nguyên trạng thái pending
+        Long activatedAt = pending.remove(player.getUniqueId());
+        if (activatedAt == null) return;
         if (!(event.getProjectile() instanceof Arrow arrow)) return;
 
         arrow.getPersistentDataContainer().set(arrowTagKey, PersistentDataType.BYTE, (byte) 1);
@@ -110,6 +162,12 @@ public class FrostShot extends AbstractSkill {
         if (!(event.getEntity() instanceof Arrow arrow)) return;
         Byte tagged = arrow.getPersistentDataContainer().get(arrowTagKey, PersistentDataType.BYTE);
         if (tagged == null || tagged != 1) return;
+
+        // Cooldown chỉ bắt đầu đếm NGAY khi freeze xảy ra (tên trúng đích)
+        if (arrow.getShooter() instanceof Player shooter) {
+            startCooldown(shooter);
+            broadcastDebug(shooter.getName() + " — bắt đầu cooldown từ lúc freeze.");
+        }
 
         Location center = arrow.getLocation();
         World world = center.getWorld();
@@ -192,8 +250,9 @@ public class FrostShot extends AbstractSkill {
     /** Kiểm tra block có phải khối đầy (full cube) hay không — dựa trên collision shape. */
     private static boolean isFullCube(Block block) {
         try {
+            // getCollisionShape() luôn trả về @NotNull theo API — không cần null-check.
+            // Block không có collision sẽ trả về shape rỗng (0 box) -> hasBox = false.
             VoxelShape shape = block.getCollisionShape();
-            if (shape == null) return false;
             boolean hasBox = false;
             for (BoundingBox box : shape.getBoundingBoxes()) {
                 hasBox = true;
@@ -215,6 +274,12 @@ public class FrostShot extends AbstractSkill {
             living.addPotionEffect(new PotionEffect(
                     PotionEffectType.SLOWNESS, (int) SLOWNESS_DURATION_TICKS, SLOWNESS_AMPLIFIER,
                     false, true, true));
+            // Chỉ người chơi bị chặn nhảy trong 5s (mobs vẫn nhảy bình thường)
+            if (entity instanceof Player player) {
+                frozenNoJump.put(player.getUniqueId(), System.currentTimeMillis() + FREEZE_DURATION_MS);
+                // Gọi qua Entity — Player#isOnGround() đã deprecated (giá trị do client báo về)
+                wasOnGround.put(player.getUniqueId(), entity.isOnGround());
+            }
         }
     }
 
@@ -223,6 +288,80 @@ public class FrostShot extends AbstractSkill {
         world.spawnParticle(Particle.BLOCK, center, 60, radius, 1, radius, Material.BLUE_ICE.createBlockData());
         world.playSound(center, Sound.BLOCK_GLASS_BREAK, 1.5f, 0.6f);
         world.playSound(center, Sound.BLOCK_SNOW_BREAK, 1.5f, 0.5f);
+    }
+
+    /**
+     * Task housekeeping chạy MỖI TICK (các map rất nhỏ, chi phí không đáng kể):
+     * <ol>
+     *   <li>Pending hết hạn 15s (chưa bắn) -> loại + nhắc nhẹ trên action bar.</li>
+     *   <li>Nhắc action bar "sẵn sàng" cho player đang pending (mỗi 1s).</li>
+     *   <li>Chặn nhảy MỚI của player đang freeze: nhận diện chuyển đất -> không trung
+     *       kèm velocity.y &gt; 0 -> triệt tiêu thành 0. Player đã ở giữa không trung
+     *       khi bị freeze (vừa nhảy, đi khỏi mép vực, bị đẩy...) thì rơi tự nhiên.</li>
+     * </ol>
+     */
+    private void startHousekeepingTask() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                long now = System.currentTimeMillis();
+
+                // 1) Pending timeout
+                if (!pending.isEmpty()) {
+                    Iterator<Map.Entry<UUID, Long>> it = pending.entrySet().iterator();
+                    while (it.hasNext()) {
+                        Map.Entry<UUID, Long> entry = it.next();
+                        if (now - entry.getValue() < PENDING_TIMEOUT_MS) continue;
+                        it.remove();
+                        Player player = Bukkit.getPlayer(entry.getKey());
+                        if (player != null) {
+                            sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &7Đã hết sẵn sàng — shift lại để kích hoạt.");
+                            broadcastDebug(player.getName() + " hết hạn pending (15s không bắn).");
+                        }
+                    }
+                }
+
+                // 2) Action bar "sẵn sàng" mỗi 20 ticks (1s)
+                if (++housekeepingTicks % 20 == 0 && !pending.isEmpty()) {
+                    for (UUID uuid : pending.keySet()) {
+                        Player player = Bukkit.getPlayer(uuid);
+                        if (player != null) {
+                            sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &fSẵn sàng — bắn cung để kích hoạt!");
+                        }
+                    }
+                }
+
+                // 3) Chặn nhảy của player đang freeze
+                if (!frozenNoJump.isEmpty()) {
+                    Iterator<Map.Entry<UUID, Long>> it = frozenNoJump.entrySet().iterator();
+                    while (it.hasNext()) {
+                        Map.Entry<UUID, Long> entry = it.next();
+                        UUID uuid = entry.getKey();
+                        if (now >= entry.getValue()) {
+                            it.remove();
+                            wasOnGround.remove(uuid);
+                            continue;
+                        }
+                        // getEntity trả null khi offline; dùng Entity để gọi isOnGround
+                        // không deprecated (Player#isOnGround đã deprecated)
+                        Entity entity = Bukkit.getEntity(uuid);
+                        if (entity == null) {
+                            it.remove();
+                            wasOnGround.remove(uuid);
+                            continue;
+                        }
+                        boolean onGround = entity.isOnGround();
+                        boolean wasGround = wasOnGround.getOrDefault(uuid, onGround);
+                        wasOnGround.put(uuid, onGround);
+                        if (!onGround && wasGround && entity.getVelocity().getY() > 0) {
+                            Vector v = entity.getVelocity();
+                            v.setY(0);
+                            entity.setVelocity(v);
+                        }
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
     }
 
     /** Dùng cho BlockBreakEvent — chặn phá block đang bị đóng băng. */

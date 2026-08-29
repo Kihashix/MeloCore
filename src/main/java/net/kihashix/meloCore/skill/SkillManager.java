@@ -110,6 +110,6 @@ public class SkillManager {
                     }
                 }
             }
-        }.runTaskTimer(plugin, 0L, 10L); // mỗi 0.5s
+        }.runTaskTimer(plugin, 0L, 2L); // mỗi 0.1s — countdown mịn: 10.0 -> 9.9 -> 9.8 ...
     }
 }
