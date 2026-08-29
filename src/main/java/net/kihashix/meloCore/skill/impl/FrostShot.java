@@ -28,7 +28,7 @@ import java.util.*;
 /**
  * Frost Shot (Hàn Băng Chí Tiễn).
  * <p>
- * Shift khi đang cầm bow (mainhand hoặc offhand) để sẵn sàng — trạng thái này
+ * Sneak khi đang cầm bow (mainhand hoặc offhand) để sẵn sàng — trạng thái này
  * tự hết hạn sau {@link #PENDING_TIMEOUT_MS} nếu không bắn. Bắn cung để đóng
  * băng vùng trúng đích:
  * <ul>
@@ -53,7 +53,7 @@ import java.util.*;
  * trúng đích. Mũi tên bị gỡ tag sau LẦN FREEZE ĐẦU TIÊN nên khi tên rơi và
  * chạm đất lần 2, 3... (do block freeze tự hồi) thì không gây freeze lại.
  * Khi cooldown hết: player nhận thông báo "chiêu đã hồi"; nếu lúc đó player
- * đang giữ shift (sneak) và cầm bow thì skill TỰ KÍCH HOẠT, không cần shift lại.
+ * đang giữ sneak và cầm bow thì skill TỰ KÍCH HOẠT, không cần sneak lại.
  * <p>
  * Tham số chỉnh runtime qua {@code /mc skills config FrostShot <option> ...}:
  * {@code radius} (bán kính block), {@code freeze-time} (ms — block hoàn nguyên,
@@ -81,7 +81,7 @@ public class FrostShot extends AbstractSkill {
     private static final long MAX_FREEZE_TIME_MS = 60_000L;
     private static final int MAX_SLOWNESS_AMPLIFIER = 10;
 
-    /** Trạng thái "sẵn sàng" sau shift chỉ còn hiệu lực trong 15s; quá hạn phải shift lại. */
+    /** Trạng thái "sẵn sàng" sau sneak chỉ còn hiệu lực trong 15s; quá hạn phải sneak lại. */
     private static final long PENDING_TIMEOUT_MS = 15_000L;
 
     /** Block đặc biệt không bao giờ bị đóng băng (bedrock, portal, block admin...). */
@@ -103,7 +103,7 @@ public class FrostShot extends AbstractSkill {
     private final MeloCore plugin;
     private final NamespacedKey arrowTagKey;
 
-    /** uuid -> thời điểm (ms) kích hoạt (shift + cầm bow). Bắn cung thì xóa. */
+    /** uuid -> thời điểm (ms) kích hoạt (sneak + cầm bow). Bắn cung thì xóa. */
     private final Map<UUID, Long> pending = new HashMap<>();
 
     /** uuid của các player ĐANG trong cooldown — để phát hiện moment cooldown HẾT. */
@@ -174,7 +174,7 @@ public class FrostShot extends AbstractSkill {
         Long activatedAt = pending.get(player.getUniqueId());
         if (activatedAt != null && System.currentTimeMillis() - activatedAt < PENDING_TIMEOUT_MS) {
             // Đã sẵn sàng và chưa hết hạn: giữ nguyên, không phát lại sound/message
-            broadcastDebug(player.getName() + " shift lần nữa — vẫn đang sẵn sàng, giữ trạng thái.");
+            broadcastDebug(player.getName() + " sneak lần nữa — vẫn đang sẵn sàng.");
             return true;
         }
 
@@ -489,7 +489,7 @@ public class FrostShot extends AbstractSkill {
      *   <li>Hiệu ứng ambient mỗi 0.25s: tuyết rơi lơ lửng trong vùng đóng băng
      *       + vòng băng xoay quanh player đang bị đóng băng.</li>
      *   <li>Cooldown vừa HẾT -> thông báo "chiêu đã hồi" + sound. Nếu lúc đó
-     *       player đang sneak (giữ shift liên tục) và cầm bow -> TỰ KÍCH HOẠT.</li>
+     *       player đang sneak (giữ sneak liên tục) và cầm bow -> TỰ KÍCH HOẠT.</li>
      * </ol>
      */
     private void startHousekeepingTask() {
@@ -548,7 +548,7 @@ public class FrostShot extends AbstractSkill {
                         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1.6f);
                         broadcastDebug(player.getName() + " cooldown kết thúc.");
 
-                        // Auto kích hoạt: player đang giữ shift (sneak) và cầm bow.
+                        // Auto kích hoạt: player đang giữ sneak (sneak) và cầm bow.
                         // Gọi qua Entity để dùng isSneaking() không deprecated.
                         Entity entity = Bukkit.getEntity(uuid);
                         if (entity != null && entity.isSneaking() && isHoldingBow(player)) {
