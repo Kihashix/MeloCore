@@ -2,9 +2,6 @@ package net.kihashix.meloCore.listener;
 
 import net.kihashix.meloCore.data.PlayerSkillData;
 import net.kihashix.meloCore.skill.impl.FrostShot;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -33,8 +30,8 @@ public class FrostShotListener implements Listener {
         if (!event.isSneaking()) return; // chỉ bắt lúc BẮT ĐẦU shift
         Player player = event.getPlayer();
         if (!skillData.hasSkill(player.getUniqueId(), skill.getId())) return;
-        // activate() trả false nếu skill đang tắt, còn cooldown, hoặc KHÔNG cầm bow
-        // (khi tắt/còn cooldown skill đã tự gửi thông báo; khi không cầm bow thì im lặng)
+        // activate() trả false nếu KHÔNG cầm bow (im lặng — tránh xung đột skill khác),
+        // skill đang tắt (có thông báo), hoặc còn cooldown (im lặng — action bar đang đếm ngược)
         boolean activated = skill.activate(player);
         if (!activated) {
             // log mức FINE: không spam console, chỉ hiện khi bật log mức thấp
@@ -71,13 +68,9 @@ public class FrostShotListener implements Listener {
 
     @EventHandler
     public void onBlockBreak(BlockBreakEvent event) {
+        // Block đang freeze KHÔNG THỂ phá — hủy im lặng (không chat, tránh spam/xung đột).
         if (skill.isFrozen(event.getBlock())) {
             event.setCancelled(true);
-            event.getPlayer().sendMessage(Component.text()
-                    .append(Component.text("Hàn Băng Chí Tiễn", NamedTextColor.AQUA, TextDecoration.BOLD))
-                    .append(Component.text(" » ", NamedTextColor.DARK_GRAY))
-                    .append(Component.text("Block đang bị đóng băng, không thể phá!", NamedTextColor.GRAY))
-                    .build());
         }
     }
 }

@@ -34,9 +34,11 @@ import java.util.*;
  *   <li>Block full (khối đầy) -> Packed Ice</li>
  *   <li>Block không full (slab, thảm, cây, ...) -> Ice</li>
  * </ul>
- * Cooldown chỉ bắt đầu đếm khi mũi tên TRÚNG ĐÍCH và freeze xảy ra (không phải
- * lúc shift) — nhờ đó không còn trường hợp "shift, đợi cooldown hết, bắn tên 1,
- * shift lại, bắn tên 2" như bản cũ.
+ * Cooldown bắt đầu đếm NGAY lúc player BẮN (thả dây cung), không phải lúc tên
+ * trúng đích. Mũi tên bị gỡ tag sau LẦN FREEZE ĐẦU TIÊN nên khi tên rơi và
+ * chạm đất lần 2, 3... (do block freeze tự hồi) thì không gây freeze lại.
+ * Khi cooldown hết: player nhận thông báo "chiêu đã hồi"; nếu lúc đó player
+ * đang giữ shift (sneak) và cầm bow thì skill TỰ KÍCH HOẠT, không cần shift lại.
  * Trong {@link #FREEZE_DURATION_MS} (Slowness IV), người chơi KHÔNG THỂ NHẢY:
  * cú nhảy mới bị triệt tiêu ngay, còn đang giữa không trung khi bị freeze thì
  * rơi tự nhiên theo trọng lực.
@@ -79,6 +81,9 @@ public class FrostShot extends AbstractSkill {
     /** uuid -> thời điểm (ms) kích hoạt (shift + cầm bow). Bắn cung thì xóa. */
     private final Map<UUID, Long> pending = new HashMap<>();
 
+    /** uuid của các player ĐANG trong cooldown — để phát hiện moment cooldown HẾT. */
+    private final Set<UUID> cooldownActive = new HashSet<>();
+
     // key = "world:x:y:z" -> BlockState gốc trước khi bị đóng băng (giữ cả dữ liệu tile entity như rương, bảng...)
     private final Map<String, BlockState> frozenBlocks = new HashMap<>();
 
@@ -100,18 +105,17 @@ public class FrostShot extends AbstractSkill {
 
     @Override
     public boolean activate(Player player) {
+        // Kiểm tra bow TRƯỚC MỌI THỨ: không cầm bow thì im lặng tuyệt đối,
+        // dù skill OFF hay đang cooldown — tránh xung đột với skill khác dùng sneak.
+        if (!isHoldingBow(player)) {
+            return false;
+        }
         if (!isEnabled()) {
             player.sendMessage(color("&c&lHàn Băng Chí Tiễn &8» &7Skill hiện đang bị tắt."));
             return false;
         }
         if (isOnCooldown(player)) {
-            player.sendMessage(color("&c&lHàn Băng Chí Tiễn &8» &7Còn &f&l"
-                    + formatSeconds(getRemainingCooldownMs(player)) + "s &7cooldown."));
-            return false;
-        }
-        // Điều kiện kích hoạt mới: phải đang cầm bow ở mainhand HOẶC offhand
-        if (!isHoldingBow(player)) {
-            return false; // im lặng — không spam khi player chỉ lủi đi bình thường
+            return false; // im lặng — action bar đã đang đếm ngược cooldown
         }
 
         Long activatedAt = pending.get(player.getUniqueId());
@@ -123,11 +127,11 @@ public class FrostShot extends AbstractSkill {
 
         pending.put(player.getUniqueId(), System.currentTimeMillis());
 
-        // Cooldown KHÔNG đếm ở đây nữa — chỉ đếm từ lúc freeze (xem onProjectileHit)
-        player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fĐã sẵn sàng! &7Bắn cung để đóng băng mục tiêu."));
+        // Cooldown KHÔNG đếm ở đây — chỉ đếm từ lúc player BẮN (xem onBowShoot)
+        player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fĐã sẵn sàng!"));
         player.getWorld().playSound(player.getLocation(), Sound.BLOCK_GLASS_STEP, 0.8f, 1.6f);
         broadcastDebug(player.getName() + " đã kích hoạt (chờ bắn cung, hết hạn sau "
-                + (PENDING_TIMEOUT_MS / 1000L) + "s). Cooldown sẽ chạy từ lúc freeze.");
+                + (PENDING_TIMEOUT_MS / 1000L) + "s). Cooldown sẽ chạy từ lúc bắn.");
         return true;
     }
 
@@ -141,9 +145,11 @@ public class FrostShot extends AbstractSkill {
                 || inv.getItemInOffHand().getType() == Material.BOW;
     }
 
-    /** Hủy trạng thái sẵn sàng — gọi khi player chết hoặc rời game. */
+    /** Hủy các trạng thái theo dõi (pending + cooldown) — gọi khi player chết hoặc rời game. */
     public void clearPending(Player player) {
-        pending.remove(player.getUniqueId());
+        UUID uuid = player.getUniqueId();
+        pending.remove(uuid);
+        cooldownActive.remove(uuid);
     }
 
     public void onBowShoot(EntityShootBowEvent event, Player player) {
@@ -154,8 +160,13 @@ public class FrostShot extends AbstractSkill {
 
         arrow.getPersistentDataContainer().set(arrowTagKey, PersistentDataType.BYTE, (byte) 1);
 
+        // Cooldown đếm từ LÚC BẮN (không đợi tên trúng đích)
+        startCooldown(player);
+        cooldownActive.add(player.getUniqueId());
+
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TRIDENT_THROW, 1f, 1.4f);
-        broadcastDebug(player.getName() + " đã bắn mũi tên mang " + getDisplayName() + ".");
+        broadcastDebug(player.getName() + " đã bắn mũi tên mang " + getDisplayName()
+                + " — cooldown chạy từ lúc này.");
     }
 
     public void onProjectileHit(ProjectileHitEvent event) {
@@ -163,11 +174,9 @@ public class FrostShot extends AbstractSkill {
         Byte tagged = arrow.getPersistentDataContainer().get(arrowTagKey, PersistentDataType.BYTE);
         if (tagged == null || tagged != 1) return;
 
-        // Cooldown chỉ bắt đầu đếm NGAY khi freeze xảy ra (tên trúng đích)
-        if (arrow.getShooter() instanceof Player shooter) {
-            startCooldown(shooter);
-            broadcastDebug(shooter.getName() + " — bắt đầu cooldown từ lúc freeze.");
-        }
+        // Tên đã "dùng xong" — gỡ tag NGAY sau lần freeze đầu để mọi lần re-hit
+        // (block freeze tự hồi -> tên cắm rơi xuống chạm đất lần 2, 3...) đều KHÔNG làm gì.
+        arrow.getPersistentDataContainer().remove(arrowTagKey);
 
         Location center = arrow.getLocation();
         World world = center.getWorld();
@@ -298,6 +307,10 @@ public class FrostShot extends AbstractSkill {
      *   <li>Chặn nhảy MỚI của player đang freeze: nhận diện chuyển đất -> không trung
      *       kèm velocity.y &gt; 0 -> triệt tiêu thành 0. Player đã ở giữa không trung
      *       khi bị freeze (vừa nhảy, đi khỏi mép vực, bị đẩy...) thì rơi tự nhiên.</li>
+     *   <li>Cooldown vừa HẾT -> thông báo "chiêu đã hồi" + sound. Nếu lúc đó player
+     *       đang sneak (giữ shift liên tục) và cầm bow -> TỰ KÍCH HOẠT (vào trạng
+     *       thái pending) — fix trường hợp player giữ shift xuyên suốt cooldown
+     *       thì không bao giờ có event bật sneak để kích hoạt.</li>
      * </ol>
      */
     private void startHousekeepingTask() {
@@ -315,7 +328,7 @@ public class FrostShot extends AbstractSkill {
                         it.remove();
                         Player player = Bukkit.getPlayer(entry.getKey());
                         if (player != null) {
-                            sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &7Đã hết sẵn sàng — shift lại để kích hoạt.");
+                            sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &7Đã hết sẵn sàng!");
                             broadcastDebug(player.getName() + " hết hạn pending (15s không bắn).");
                         }
                     }
@@ -326,7 +339,7 @@ public class FrostShot extends AbstractSkill {
                     for (UUID uuid : pending.keySet()) {
                         Player player = Bukkit.getPlayer(uuid);
                         if (player != null) {
-                            sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &fSẵn sàng — bắn cung để kích hoạt!");
+                            sendActionBar(player, "&b&lHàn Băng Chí Tiễn &8» &fSẵn sàng!");
                         }
                     }
                 }
@@ -360,6 +373,33 @@ public class FrostShot extends AbstractSkill {
                         }
                     }
                 }
+
+                // 4) Cooldown vừa hết -> thông báo "chiêu đã hồi" (+ auto kích hoạt)
+                if (!cooldownActive.isEmpty()) {
+                    Iterator<UUID> it = cooldownActive.iterator();
+                    while (it.hasNext()) {
+                        UUID uuid = it.next();
+                        Player player = Bukkit.getPlayer(uuid);
+                        if (player == null) {
+                            it.remove(); // offline -> bỏ theo dõi
+                            continue;
+                        }
+                        if (isOnCooldown(player)) continue; // chưa hết
+                        it.remove();
+
+                        player.sendMessage(color("&b&lHàn Băng Chí Tiễn &8» &fChiêu đã hồi!"));
+                        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.5f, 1.6f);
+                        broadcastDebug(player.getName() + " cooldown kết thúc.");
+
+                        // Auto kích hoạt: player đang giữ shift (sneak) và cầm bow.
+                        // Gọi qua Entity để dùng isSneaking() không deprecated.
+                        Entity entity = Bukkit.getEntity(uuid);
+                        if (entity != null && entity.isSneaking() && isHoldingBow(player)) {
+                            broadcastDebug(player.getName() + " đang sneak + cầm bow — tự kích hoạt.");
+                            activate(player);
+                        }
+                    }
+                }
             }
         }.runTaskTimer(plugin, 1L, 1L);
     }
@@ -371,10 +411,6 @@ public class FrostShot extends AbstractSkill {
 
     private String key(Block block) {
         return block.getWorld().getName() + ":" + block.getX() + ":" + block.getY() + ":" + block.getZ();
-    }
-
-    private String formatSeconds(long ms) {
-        return String.format("%.1f", ms / 1000.0);
     }
 
     private String formatLocation(Location loc) {
