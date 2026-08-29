@@ -1,0 +1,6 @@
+name: MeloCore
+version: '${version}'
+
+main: net.kihashix.meloCore.MeloCore
+api-version: '1.21.11'
+load: POSTWORLD
