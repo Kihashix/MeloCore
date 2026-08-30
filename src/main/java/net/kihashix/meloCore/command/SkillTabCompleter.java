@@ -1,5 +1,7 @@
 package net.kihashix.meloCore.command;
 
+import net.kihashix.meloCore.item.CustomItem;
+import net.kihashix.meloCore.item.ItemManager;
 import net.kihashix.meloCore.skill.Skill;
 import net.kihashix.meloCore.skill.SkillConfigOption;
 import net.kihashix.meloCore.skill.SkillManager;
@@ -17,15 +19,28 @@ import java.util.stream.Collectors;
 public class SkillTabCompleter implements TabCompleter {
 
     private final SkillManager skillManager;
+    private final ItemManager itemManager;
 
     public SkillTabCompleter(SkillManager skillManager) {
         this.skillManager = skillManager;
+        this.itemManager = null;
+    }
+
+    public SkillTabCompleter(SkillManager skillManager, ItemManager itemManager) {
+        this.skillManager = skillManager;
+        this.itemManager = itemManager;
     }
 
     @Override
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                       @NotNull String alias, @NotNull String @NotNull [] args) {
-        if (args.length == 1) return filter(List.of("skills", "update"), args[0]);
+        if (args.length == 1) return filter(List.of("skills", "update", "items"), args[0]);
+
+        // Handle /mc items subcommand
+        if (args[0].equalsIgnoreCase("items")) {
+            return completeItemsTab(args);
+        }
+
         if (args[0].equalsIgnoreCase("update")) {
             // /mc update <check|download>
             if (args.length == 2) return filter(List.of("check", "download"), args[1]);
@@ -77,6 +92,28 @@ public class SkillTabCompleter implements TabCompleter {
             default -> {}
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * Tab completion for /mc items subcommand.
+     */
+    private List<String> completeItemsTab(String[] args) {
+        if (args.length == 2) {
+            return filter(List.of("give", "list"), args[1]);
+        }
+        if (args[1].equalsIgnoreCase("give")) {
+            if (args.length == 3) return filter(playerNames(), args[2]);  // Player name
+            if (args.length == 4) return filter(itemIds(), args[3]);     // Item ID
+            if (args.length == 5) return filter(List.of("1", "16", "32", "64"), args[4]); // Amount
+        }
+        return new ArrayList<>();
+    }
+
+    private List<String> itemIds() {
+        if (itemManager == null) return new ArrayList<>();
+        return itemManager.getAll().values().stream()
+                .map(CustomItem::getId)
+                .collect(Collectors.toList());
     }
 
     private List<String> skillIds() {

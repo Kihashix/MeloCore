@@ -1,10 +1,13 @@
 package net.kihashix.meloCore;
 
+import net.kihashix.meloCore.command.ItemCommand;
 import net.kihashix.meloCore.command.SkillCommand;
 import net.kihashix.meloCore.command.SkillTabCompleter;
 import net.kihashix.meloCore.command.UpdateCommand;
 import net.kihashix.meloCore.data.PlayerSkillData;
+import net.kihashix.meloCore.item.ItemManager;
 import net.kihashix.meloCore.listener.FrostShotListener;
+import net.kihashix.meloCore.listener.ItemListener;
 import net.kihashix.meloCore.skill.SkillManager;
 import net.kihashix.meloCore.skill.impl.FrostShot;
 import net.kihashix.meloCore.update.UpdateService;
@@ -15,6 +18,7 @@ public final class MeloCore extends JavaPlugin {
 
     private SkillManager skillManager;
     private PlayerSkillData playerSkillData;
+    private ItemManager itemManager;
 
     @Override
     public void onEnable() {
@@ -32,11 +36,26 @@ public final class MeloCore extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new FrostShotListener(frostShot, playerSkillData, this), this);
 
+        // Register custom items
+        this.itemManager = new ItemManager(this);
+        itemManager.register();
+
+        // Register item event listener
+        getServer().getPluginManager().registerEvents(
+                new ItemListener(itemManager), this);
+
         PluginCommand mcCommand = getCommand("mc");
         if (mcCommand != null) {
-            mcCommand.setExecutor(new SkillCommand(skillManager, playerSkillData,
-                    new UpdateCommand(this, new UpdateService(this))));
-            mcCommand.setTabCompleter(new SkillTabCompleter(skillManager));
+            SkillCommand skillCmd = new SkillCommand(skillManager, playerSkillData,
+                    new UpdateCommand(this, new UpdateService(this)));
+            mcCommand.setExecutor((sender, cmd, label, args) -> {
+                // Route to item command if first arg is "items"
+                if (args.length > 0 && args[0].equalsIgnoreCase("items")) {
+                    return new ItemCommand(itemManager).onCommand(sender, cmd, label, args);
+                }
+                return skillCmd.onCommand(sender, cmd, label, args);
+            });
+            mcCommand.setTabCompleter(new SkillTabCompleter(skillManager, itemManager));
         } else {
             getLogger().severe("Không tìm thấy lệnh 'mc' trong plugin.yml!");
         }

@@ -7,12 +7,15 @@ load: POSTWORLD
 
 commands:
   mc:
-    description: Lenh chinh cua MeloCore (quan ly skill, kiem tra update)
-    usage: /mc <skills|update> ...
+    description: Lenh chinh cua MeloCore (quan ly skill, items, kiem tra update)
+    usage: /mc <skills|items|update> ...
 
 permissions:
   melocore.admin.skills:
     description: Quan ly skill (give/remove/cooldown/toggle)
+    default: op
+  melocore.admin.items:
+    description: Quan ly items (give/list)
     default: op
   melocore.admin.debug:
     description: Bat/tat debug va nhan thong bao debug
